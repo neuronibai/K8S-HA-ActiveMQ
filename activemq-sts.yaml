@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: activemq
+  namespace: messaging
+  labels:
+    app: activemq
+spec:
+  serviceName: activemq-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      app: activemq
+  template:
+    metadata:
+      labels:
+        app: activemq
+    spec:
+      containers:
+        - name: activemq
+          image: your-registry/activemq:latest  # <-- Replace with actual image path
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: web
+              containerPort: 8161
+            - name: openwire
+              containerPort: 61616
+            - name: amqp
+              containerPort: 5672
+            - name: stomp
+              containerPort: 61613
+            - name: mqtt
+              containerPort: 1883
+            - name: ws
+              containerPort: 61614
+            - name: jmx
+              containerPort: 1099
+          env:
+            - name: ACTIVEMQ_INSTALL_PATH
+              value: /opt
+            - name: ACTIVEMQ_HOME
+              value: /opt/apache-activemq
+            - name: ACTIVEMQ_CONF
+              value: /opt/apache-activemq/conf
+            - name: ACTIVEMQ_OPTS_MEMORY
+              value: "-Xms64M -Xmx1G"
+            - name: ACTIVEMQ_OPTS
+              value: "-Djava.util.logging.config.file=logging.properties -Djava.security.auth.login.config=/opt/apache-activemq/conf/login.config -Djetty.host=0.0.0.0"
+          volumeMounts:
+            - name: activemq-data
+              mountPath: /opt/apache-activemq/data
+            - name: activemq-conf
+              mountPath: /opt/apache-activemq/conf
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8161
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 61616
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: activemq-conf
+          configMap:
+            name: activemq-config
+  volumeClaimTemplates:
+    - metadata:
+        name: activemq-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: standard
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: activemq-config
+  namespace: messaging
+data:
+  # Minimal configuration example, extend as per your setup
+  activemq.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <beans xmlns="http://www.springframework.org/schema/beans"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+      <broker xmlns="http://activemq.apache.org/schema/core" brokerName="localhost" dataDirectory="${ACTIVEMQ_DATA}">
+        <transportConnectors>
+          <transportConnector name="openwire" uri="tcp://0.0.0.0:61616"/>
+        </transportConnectors>
+      </broker>
+    </beans>
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: activemq
+  namespace: messaging
+  labels:
+    app: activemq
+spec:
+  type: ClusterIP
+  ports:
+    - name: web
+      port: 8161
+      targetPort: 8161
+    - name: openwire
+      port: 61616
+      targetPort: 61616
+  selector:
+    app: activemq
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: activemq-headless
+  namespace: messaging
+  labels:
+    app: activemq
+spec:
+  clusterIP: None
+  selector:
+    app: activemq
