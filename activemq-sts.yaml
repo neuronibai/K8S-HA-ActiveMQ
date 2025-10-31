@@ -82,7 +82,6 @@ metadata:
   name: activemq-config
   namespace: messaging
 data:
-  # Minimal configuration example, extend as per your setup
   activemq.xml: |
     <?xml version="1.0" encoding="UTF-8"?>
     <beans xmlns="http://www.springframework.org/schema/beans"
